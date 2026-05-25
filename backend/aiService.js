@@ -1,7 +1,7 @@
-const { OpenAI } = require('openai');
+const { GoogleGenAI } = require('@google/genai');
 const { validateSchema } = require('./schemaValidator');
 
-const openai = new OpenAI({
+const ai = new GoogleGenAI({
     apiKey: process.env.LLM_API_KEY || 'dummy_key'
 });
 
@@ -44,19 +44,22 @@ async function generateSchemaWithRetry(prompt, conversationHistory, mockFailures
                         }
                     };
                 } else {
-                    const messages = [
-                        { role: 'system', content: systemPrompt },
-                        ...conversationHistory,
-                        { role: 'user', content: currentPrompt }
-                    ];
+                    const contents = conversationHistory.map(msg => ({
+                        role: msg.role === 'assistant' ? 'model' : 'user',
+                        parts: [{ text: msg.content }]
+                    }));
+                    contents.push({ role: 'user', parts: [{ text: currentPrompt }] });
 
-                    const response = await openai.chat.completions.create({
-                        model: 'gpt-3.5-turbo',
-                        messages: messages,
-                        response_format: { type: "json_object" }
+                    const response = await ai.models.generateContent({
+                        model: 'gemini-2.5-flash',
+                        contents: contents,
+                        config: {
+                            systemInstruction: systemPrompt,
+                            responseMimeType: 'application/json',
+                        }
                     });
 
-                    const content = response.choices[0].message.content;
+                    const content = response.text;
                     generatedSchema = JSON.parse(content);
                 }
             }
